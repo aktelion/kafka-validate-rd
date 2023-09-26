@@ -1,54 +1,67 @@
-apiVersion: apps/v1
-kind: Deployment
+#  https://www.mitrais.com/news-updates/deploying-a-multi-broker-kafka-cluster-in-kubernetes/
+apiVersion: v1
+kind: Service
 metadata:
-  name: kafka-deployment
+  name: kafka-svc
+  labels:
+    app: kafka-app
 spec:
+  clusterIP: None
+  ports:
+    - name: main
+      port: 9092
+      protocol: TCP
+      targetPort: 9092
+  selector:
+    app: kafka-app
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  labels:
+    app: kafka-app
+spec:
+  serviceName: kafka-svc
+  replicas: 3
   selector:
     matchLabels:
-      app: kafka
+      app: kafka-app
   template:
     metadata:
       labels:
-        app: kafka
+        app: kafka-app
     spec:
       containers:
-        - name: kafka
-          image: bitnami/kafka:3.5
+        - name: kafka-container
+          image: doughgle/kafka-kraft
           ports:
             - containerPort: 9092
             - containerPort: 9093
           env:
-            - name: KAFKA_CFG_NODE_ID
-              value: "0"
-            - name: KAFKA_CFG_PROCESS_ROLES
-              value: "controller,broker"
-            - name: KAFKA_CFG_LISTENERS
-              value: "PLAINTEXT://:9092,CONTROLLER://:9093"
-            - name: KAFKA_CFG_ADVERTISED_LISTENERS
-              value: "PLAINTEXT://:9093"
-            - name: KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP
-              value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
-            - name: KAFKA_CFG_CONTROLLER_QUORUM_VOTERS
-              value: "0@kafka:9093"
-            - name: KAFKA_CFG_CONTROLLER_LISTENER_NAMES
-              value: "CONTROLLER"
-            - name: KAFKA_CFG_INTER_BROKER_LISTENER_NAME
-              value: "PLAINTEXT"
-
----
-
-apiVersion: v1
-kind: Service
-metadata:
-  name: kafka
-spec:
-  type: ClusterIP
-  selector:
-    app: kafka
-  ports:
-    - name: main
-      port: 9092
-      targetPort: 9092
-    - name: aux
-      port: 9093
-      targetPort: 9093
+            - name: REPLICAS
+              value: "3"
+            - name: SERVICE
+              value: kafka-svc
+            - name: NAMESPACE
+              value: default
+            - name: SHARE_DIR
+              value: /mnt/kafka
+            - name: CLUSTER_ID
+              value: kb-WV7dt8Au9ixOk4YbRm5tL
+            - name: DEFAULT_REPLICATION_FACTOR
+              value: "3"
+            - name: DEFAULT_MIN_INSYNC_REPLICAS
+              value: "2"
+          volumeMounts:
+            - name: data
+              mountPath: /mnt/kafka
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - "ReadWriteOnce"
+        resources:
+          requests:
+            storage: "1Gi"
